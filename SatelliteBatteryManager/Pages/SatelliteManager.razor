@@ -1,0 +1,114 @@
+﻿@page "/satellite-manager"
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<div class="cetered">
+    <h3>Управление зарядкой спутника</h3>
+</div>
+
+<div class="container">
+    <div class="card">
+        <div class="card-header">
+            <h5>Статус спутника</h5>
+        </div>
+        <div class="card-body">
+            <p class="card-text">Уровень заряда: <strong>@FormatBatteryCharge(satellite.BatteryCharge)</strong></p>
+            <p class="card-text">Время активной работы: <strong>@FormatTime(satellite.ActiveTime)</strong></p>
+            <p class="card-text">Режим зарядки: <strong>@(satellite.IsCharging ? "Включен" : "Выключен")</strong></p>
+            <p class="card-text">Время последнего сеанса зарядки: <strong>@FormatTime(satellite.LastChargeDuration)</strong></p>
+            @if (satellite.BatteryCharge < 5)
+            {
+                <div class="alert alert-warning">Предупреждение: Уровень заряда ниже 5%!</div>
+            }
+        </div>
+    </div>
+
+    <div>
+        <button class="btn btn-success" @onclick="StartCharging" disabled="@satellite.IsCharging">Начать зарядку</button>
+        <button class="btn btn-danger" @onclick="StopCharging" disabled="@(!satellite.IsCharging)">Остановить зарядку</button>
+        <button class="btn btn-info" @onclick="RefreshStatus">Обновить статус</button>
+    </div>
+</div>
+
+@code {
+    private Satellite satellite = new Satellite();
+    private HubConnection? hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Создаем HubConnection с правильным URL
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/satelliteHub"))
+            .Build();
+
+        // Подписываемся на обновления спутника
+        hubConnection.On<Satellite>("UpdateSatellite", (updatedSatellite) =>
+        {
+            satellite = updatedSatellite;
+            StateHasChanged(); // Обновляем состояние компонента
+        });
+
+        try
+        {
+            await hubConnection.StartAsync(); // Устанавливаем соединение
+            await hubConnection.InvokeAsync("GetSatelliteStatus"); // Получаем текущее состояние спутника
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка подключения: {ex.Message}");
+        }
+    }
+
+    private async Task StartCharging()
+    {
+        try
+        {
+            await hubConnection.InvokeAsync("StartCharging"); // Отправляем команду на сервер для начала зарядки
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при начале зарядки: {ex.Message}");
+        }
+    }
+
+    private async Task StopCharging()
+    {
+        try
+        {
+            await hubConnection.InvokeAsync("StopCharging"); // Отправляем команду на сервер для остановки зарядки
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при остановке зарядки: {ex.Message}");
+        }
+    }
+
+    private async Task RefreshStatus()
+    {
+        try
+        {
+            await hubConnection.InvokeAsync("GetSatelliteStatus"); // Обновляем статус спутника
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Ошибка при обновлении статуса: {ex.Message}");
+        }
+    }
+    private string FormatBatteryCharge(double charge)
+    {
+        return $"{charge:F2}%";
+    }
+
+    private string FormatTime(TimeSpan time)
+    {
+        return string.Format("{0:D2}:{1:D2}:{2:D2}", (int)time.TotalHours, time.Minutes, time.Seconds);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync(); // Закрываем соединение при уничтожении компонента
+        }
+    }
+}
