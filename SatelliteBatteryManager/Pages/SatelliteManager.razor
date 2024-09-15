@@ -26,14 +26,15 @@
     <div>
         <button class="btn btn-success" @onclick="StartCharging" disabled="@satellite.IsCharging">Начать зарядку</button>
         <button class="btn btn-danger" @onclick="StopCharging" disabled="@(!satellite.IsCharging)">Остановить зарядку</button>
-        <button class="btn btn-info" @onclick="RefreshStatus">Обновить статус</button>
+        
     </div>
 </div>
 
 @code {
     private Satellite satellite = new Satellite();
     private HubConnection? hubConnection;
-
+    private System.Timers.Timer? timer;
+    // <button class="btn btn-info" @onclick="RefreshStatus">Обновить статус</button>
     protected override async Task OnInitializedAsync()
     {
         // Создаем HubConnection с правильным URL
@@ -42,16 +43,26 @@
             .Build();
 
         // Подписываемся на обновления спутника
-        hubConnection.On<Satellite>("UpdateSatellite", (updatedSatellite) =>
+        hubConnection.On<Satellite>("UpdateSatellite", async (updatedSatellite) =>
         {
             satellite = updatedSatellite;
-            StateHasChanged(); // Обновляем состояние компонента
+            // Обновляем состояние компонента в безопасном контексте
+            await InvokeAsync(StateHasChanged);
         });
 
         try
         {
             await hubConnection.StartAsync(); // Устанавливаем соединение
             await hubConnection.InvokeAsync("GetSatelliteStatus"); // Получаем текущее состояние спутника
+
+            // Настраиваем таймер для периодического обновления статуса
+            timer = new System.Timers.Timer(1500); 
+            timer.Elapsed += async (sender, e) =>
+            {
+                 await RefreshStatus();
+            };
+            timer.AutoReset = true;
+            timer.Enabled = true;
         }
         catch (Exception ex)
         {
@@ -106,6 +117,11 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (timer != null)
+        {
+            timer.Stop(); // Останавливаем таймер
+            timer.Dispose(); // Освобождаем ресурсы таймера
+        }
         if (hubConnection is not null)
         {
             await hubConnection.DisposeAsync(); // Закрываем соединение при уничтожении компонента
