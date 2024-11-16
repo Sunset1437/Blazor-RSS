@@ -26,15 +26,6 @@ internal class Program
         builder.Logging.AddConsole();
         builder.Logging.AddDebug();
 
-        //// Настройка Serilog
-        //Log.Logger = new LoggerConfiguration()
-        //    .MinimumLevel.Debug() // Уровень логирования
-        //    .WriteTo.Console()    // Логи в консоль
-        //    //.WriteTo.File("logs/myapp.txt", rollingInterval: RollingInterval.Day) // Логи в файл
-        //    .CreateLogger();
-
-        //builder.Host.UseSerilog(); //Serilog как логгер
-
         var app = builder.Build();
 
         if (!app.Environment.IsDevelopment())
@@ -50,22 +41,10 @@ internal class Program
         // Настройка маршрутов
         app.MapBlazorHub();
         app.MapFallbackToPage("/_Host");
-        app.MapHub<SatelliteHub>("/satelliteHub"); // Регистрация SignalR хаба
-
-        // Запускаем таймер обновления состояния
-        StartBatteryUpdateTimer(app.Services.GetRequiredService<SatelliteService>());
+        app.MapHub<SatelliteHub>($"/{nameof(SatelliteHub)}"); // Регистрация SignalR хаба
 
         app.Run();
 
-        void StartBatteryUpdateTimer(SatelliteService satelliteService)
-        {
-            Timer timer = new Timer(1000); // Обновление каждую секунду
-            timer.Elapsed += (sender, e) =>
-            {
-                satelliteService.UpdateBatteryStatus(1);
-            };
-            timer.Start();
-        }
 
     }
 }

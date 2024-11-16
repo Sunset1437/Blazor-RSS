@@ -9,19 +9,19 @@ namespace SatelliteBatteryManager.Services
 {
     public class SatelliteService // Взаимодействие с бизнес-логикой
     {
-        private readonly IHubContext<SatelliteHub> HubContext;
-        private readonly ILogger<SatelliteService> Logger;
-        private Timer Timer;
-        private Satellite Satellite;
+        private readonly IHubContext<SatelliteHub> _hubContext;
+        private readonly ILogger<SatelliteService> _logger;
+        private Timer _timer;
+        private Satellite _satellite;
 
         public SatelliteService(IHubContext<SatelliteHub> hubContext, ILogger<SatelliteService> logger)
         {
-            HubContext = hubContext;
-            Logger = logger;
-            Satellite = new Satellite();
-            Timer = new Timer(1000);
-            Timer.Elapsed += TimerElapsed;
-            Timer.Start();
+            _hubContext = hubContext;
+            _logger = logger;
+            _satellite = new Satellite();
+            _timer = new Timer(1000);
+            _timer.Elapsed += TimerElapsed;
+            _timer.Start();
         }
 
         private void TimerElapsed(object sender, ElapsedEventArgs e)
@@ -33,47 +33,48 @@ namespace SatelliteBatteryManager.Services
 
         public void UpdateBatteryStatus(double deltaTime)
         {
-            if (Satellite.IsCharging)
+            if (_satellite.IsCharging)
             {
-                Satellite.BatteryCharge = Math.Min(100, Satellite.BatteryCharge + 0.37 * deltaTime);
-                Satellite.LastChargeDuration = Satellite.LastChargeDuration.Add(TimeSpan.FromSeconds(deltaTime));
+                _satellite.BatteryCharge = Math.Min(100, _satellite.BatteryCharge + 0.37 * deltaTime);
+                _satellite.LastChargeDuration = _satellite.LastChargeDuration.Add(TimeSpan.FromSeconds(deltaTime));
             }
             else
             {
-                Satellite.BatteryCharge = Math.Max(0, Satellite.BatteryCharge - 0.51 * deltaTime);
-                Satellite.ActiveTime = Satellite.ActiveTime.Add(TimeSpan.FromSeconds(deltaTime));
+                _satellite.BatteryCharge = Math.Max(0, _satellite.BatteryCharge - 0.51 * deltaTime);
+                _satellite.ActiveTime = _satellite.ActiveTime.Add(TimeSpan.FromSeconds(deltaTime));
             }
 
-            if (Satellite.BatteryCharge <= 5)
+            if (_satellite.BatteryCharge <= 5)
             {
-                Logger.LogWarning("Battery charge is below 5%!");
+                _logger.LogWarning("Battery charge is below 5%!");
             }
             NotifyClients();
         }
 
         public void ToggleCharging()
         {
-            Satellite.IsCharging=!Satellite.IsCharging;
-            if (Satellite.IsCharging)
+            _satellite.IsCharging=!_satellite.IsCharging;
+            if (_satellite.IsCharging)
             {
-                Satellite.LastChargeDuration = TimeSpan.Zero;
-                Logger.LogInformation("Charging started.");
+                _satellite.LastChargeDuration = TimeSpan.Zero;
+                _logger.LogInformation("Charging started.");
             }
             else
             {
-                Satellite.ChargeEndTime = DateTime.Now;
-                Logger.LogInformation("Charging stopped.");
+                _satellite.ChargeEndTime = DateTime.Now;
+                _logger.LogInformation("Charging stopped.");
             }
+            NotifyClients();
         }
 
         public Satellite GetSatelliteStatus()
         {
-            return Satellite; // Возвращаем текущее состояние спутника
+            return _satellite; // Возвращаем текущее состояние спутника
         }
 
         private async void NotifyClients()
         {
-            await HubContext.Clients.All.SendAsync("UpdateSatellite", Satellite);
+            await _hubContext.Clients.All.SendAsync(nameof(SatelliteHub.ReceiveBatteryUpdatedStatus), _satellite);
         }
     }
 }
